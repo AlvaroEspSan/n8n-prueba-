@@ -1,42 +1,37 @@
-# Imagen Playwright (Ubuntu) con Chromium ya listo
-FROM mcr.microsoft.com/playwright:v1.47.0-jammy
+# Node >= 20.19 (vamos con 22 LTS)
+FROM node:22-bookworm-slim
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git tini && \
+    ca-certificates git curl wget tini && \
     rm -rf /var/lib/apt/lists/*
 
-# ✅ Instala una versión válida de n8n
-# Opción A: siempre la última estable
+# Instala n8n compatible
 RUN npm i -g n8n@latest
-# Opción B (si quieres quedarte en la rama 1.x): 
-# RUN npm i -g "n8n@^1"
-
-# Prepara directorios usando el usuario correcto de esta imagen: pwuser
-ENV N8N_HOME=/home/pwuser/.n8n
-RUN mkdir -p /app/scripts "$N8N_HOME" && \
-    chown -R pwuser:pwuser /app "$N8N_HOME"
 
 WORKDIR /app
 
-# (Opcional) dependencias de tu proyecto
+# Dependencias de tu proyecto (opcional)
 COPY package.json /app/package.json
 RUN npm install --production || true
 
-# Copia tus scripts
-COPY --chown=pwuser:pwuser scripts/ /app/scripts/
+# Instala Playwright + Chromium y TODAS sus dependencias del SO
+RUN npx playwright install --with-deps chromium
 
-# Variables base (ajústalas en Railway)
+# Copia tus scripts y asigna permisos al usuario 'node'
+RUN mkdir -p /app/scripts && chown -R node:node /app
+COPY --chown=node:node scripts/ /app/scripts/
+
+# Vars por defecto (ajústalas en Railway)
 ENV N8N_PORT=5678 \
-    N8N_PROTOCOL=http \
     N8N_HOST=0.0.0.0 \
+    N8N_PROTOCOL=http \
     WEBHOOK_TUNNEL_URL=http://localhost:5678 \
     NODE_ENV=production
 
-USER pwuser
+USER node
 EXPOSE 5678
 ENTRYPOINT ["/usr/bin/tini","--"]
 CMD ["n8n"]
-
 
 
